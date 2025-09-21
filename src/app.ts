@@ -1,19 +1,8 @@
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import routes from "./routes/index.js";
+import { Router } from "express";
+import n8n from "./routes/n8n.ts";
 
-export function createApp() {
-  const app = express();
+const router = Router();
 
-  app.use(helmet());
-  app.use(cors());
-  app.use(express.json({ limit: "1mb" }));
+router.use(n8n);
 
-  app.use("/api/v1", routes);
-
-  // fallback 404
-  app.use((req, res) => res.status(404).json({ error: "Not Found" }));
-
-  return app;
-}
+export default router;

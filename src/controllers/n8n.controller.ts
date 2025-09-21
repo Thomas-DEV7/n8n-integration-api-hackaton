@@ -1,4 +1,3 @@
-// src/controllers/n8n.controller.ts
 import { Request, Response } from "express";
 import axios from "axios";
 

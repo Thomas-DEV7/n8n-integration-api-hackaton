@@ -1,4 +1,3 @@
-// src/routes/n8n.ts
 import { Router } from "express";
 import { triggerN8n } from "../controllers/n8n.controller.js";
 import { requireApiKey } from "../middlewares/apiKey.js";
