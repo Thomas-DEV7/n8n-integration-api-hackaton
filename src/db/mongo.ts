@@ -1,4 +1,3 @@
-// src/db/mongo.ts
 import "dotenv/config";
 import { MongoClient, Db, ServerApiVersion } from "mongodb";
 

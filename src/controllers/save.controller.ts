@@ -1,4 +1,3 @@
-// src/controllers/save.controller.ts
 import { Request, Response } from "express";
 import { getDb } from "../db/mongo.js";
 
