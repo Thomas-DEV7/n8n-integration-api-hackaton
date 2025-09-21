@@ -58,7 +58,19 @@ function normalize(body: any): SaveInput[] {
 
 export async function savePortCalls(req: Request, res: Response) {
   try {
+    const rid = (req as any).rid as string | undefined;
     const items = normalize(req.body);
+
+    console.log(JSON.stringify({
+      t: new Date().toISOString(), level: "info", msg: "save.in",
+      rid, count: items.length,
+      sample: items[0] ? {
+        identificadorNavio: items[0].identificadorNavio,
+        nomeArmador: items[0].nomeArmador,
+        dataPrevistaAtracacao: items[0].dataPrevistaAtracacao
+      } : null
+    }));
+
     if (items.length === 0) return res.status(400).json({ error: "Empty payload" });
 
     for (const [i, it] of items.entries()) {
@@ -72,7 +84,6 @@ export async function savePortCalls(req: Request, res: Response) {
 
     const db = await getDb();
     const coll = db.collection<PortCallDoc>("port_calls");
-
     const results: (PortCallDoc & { _id: any })[] = [];
 
     for (const it of items as SaveInput[]) {
@@ -96,9 +107,18 @@ export async function savePortCalls(req: Request, res: Response) {
       if (doc) results.push(doc as any);
     }
 
+    console.log(JSON.stringify({
+      t: new Date().toISOString(), level: "info", msg: "save.ok",
+      rid, upserted: results.length
+    }));
+
     return res.status(201).json({ upserted: results.length, data: results });
   } catch (err: any) {
-    console.error("[save] mongo error", err);
+    const rid = (req as any).rid as string | undefined;
+    console.error(JSON.stringify({
+      t: new Date().toISOString(), level: "error", msg: "save.err",
+      rid, error: err?.message
+    }));
     return res.status(502).json({ error: "DB error", detail: err?.message ?? String(err) });
   }
 }
