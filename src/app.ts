@@ -1,8 +1,20 @@
-import { Router } from "express";
-import n8n from "./routes/n8n.ts";
+// src/app.ts
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import routes from "./routes/index.js";
 
-const router = Router();
+export function createApp() {
+  const app = express();
 
-router.use(n8n);
+  app.use(helmet());
+  app.use(cors());
+  app.use(express.json({ limit: "1mb" }));
 
-export default router;
+  app.use("/api/v1", routes);
+
+  // 404
+  app.use((req, res) => res.status(404).json({ error: "Not Found" }));
+
+  return app;
+}
