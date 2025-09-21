@@ -32,15 +32,24 @@ function unwrap<T = any>(x: any): T {
   return x && typeof x === "object" && x.json && typeof x.json === "object" ? (x.json as T) : (x as T);
 }
 
+function tryParseStringBody(b: unknown): unknown {
+  if (typeof b === "string") {
+    try { return JSON.parse(b); } catch {}
+  }
+  return b;
+}
+
 function normalize(body: any): SaveInput[] {
-  const src: any[] = Array.isArray(body)
-    ? body
-    : Array.isArray(body?.data)
-    ? body.data
-    : Array.isArray(body?.items)
-    ? body.items
-    : body
-    ? [body]
+  const srcAny = tryParseStringBody(body) as any;
+
+  const src: any[] = Array.isArray(srcAny)
+    ? srcAny
+    : Array.isArray(srcAny?.data)
+    ? srcAny.data
+    : Array.isArray(srcAny?.items)
+    ? srcAny.items
+    : srcAny
+    ? [srcAny]
     : [];
 
   return src
@@ -59,6 +68,18 @@ function normalize(body: any): SaveInput[] {
 export async function savePortCalls(req: Request, res: Response) {
   try {
     const rid = (req as any).rid as string | undefined;
+
+    const ct = req.headers["content-type"] || "";
+    const rawPreview =
+      typeof req.body === "string"
+        ? req.body.slice(0, 200)
+        : JSON.stringify(req.body)?.slice(0, 200);
+
+    console.log(JSON.stringify({
+      t: new Date().toISOString(), level: "info", msg: "save.raw",
+      rid, ct, type: typeof req.body, preview: rawPreview
+    }));
+
     const items = normalize(req.body);
 
     console.log(JSON.stringify({
