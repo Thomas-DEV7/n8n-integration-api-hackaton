@@ -25,13 +25,23 @@ type SaveInput = {
 
 function toDate(s?: string | null): Date | null {
   if (!s) return null;
-  const d = new Date(s);
+  // tenta como veio
+  let d = new Date(s);
+  if (!Number.isNaN(d.getTime())) return d;
+  // se não tinha timezone, tenta como UTC
+  d = new Date(`${s}Z`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// Aceita: objeto, array, {data:[...]}, {items:[...]}
+// Se o item vier como { json: {...} } (padrão do n8n), retorna o .json; senão, o próprio item
+function unwrapJson<T = any>(x: any): T {
+  return x && typeof x === "object" && x.json && typeof x.json === "object" ? (x.json as T) : (x as T);
+}
+
+// Converte qualquer forma de corpo em uma lista de SaveInput
 function normalize(body: any): SaveInput[] {
-  const raw = Array.isArray(body)
+  // aceita: array, {data: [...]}, {items: [...]}, objeto único
+  const base = Array.isArray(body)
     ? body
     : Array.isArray(body?.data)
     ? body.data
@@ -41,14 +51,20 @@ function normalize(body: any): SaveInput[] {
     ? [body]
     : [];
 
-  return raw.map((r: any) => ({
-    identificadorNavio: String(r.identificadorNavio ?? ""),
-    nomeArmador: String(r.nomeArmador ?? ""),
-    dataPrevistaAtracacao: String(r.dataPrevistaAtracacao ?? ""),
-    dataRealAtracacao: r.dataRealAtracacao != null ? String(r.dataRealAtracacao) : null,
-    statusGrid: r.statusGrid != null ? String(r.statusGrid) : null,
-    motivoAtraso: r.motivoAtraso != null ? String(r.motivoAtraso) : null,
-  }));
+  return base
+    .map((r: any) => unwrapJson<Partial<SaveInput>>(r))
+    .map((r) => ({
+      identificadorNavio: String(r?.identificadorNavio ?? ""),
+      nomeArmador: String(r?.nomeArmador ?? ""),
+      dataPrevistaAtracacao: String(r?.dataPrevistaAtracacao ?? ""),
+      dataRealAtracacao: r?.dataRealAtracacao != null ? String(r.dataRealAtracacao) : null,
+      statusGrid: r?.statusGrid != null ? String(r.statusGrid) : null,
+      motivoAtraso: r?.motivoAtraso != null ? String(r.motivoAtraso) : null,
+    }))
+    // filtra totalmente vazios (caso chegue lixo do fluxo)
+    .filter(
+      (r) => r.identificadorNavio || r.nomeArmador || r.dataPrevistaAtracacao
+    );
 }
 
 export async function savePortCalls(req: Request, res: Response) {
@@ -74,7 +90,8 @@ export async function savePortCalls(req: Request, res: Response) {
     const db = await getDb();
     const coll = db.collection<PortCallDoc>("port_calls");
 
-    const results: PortCallDoc[] = [];
+    const results: (PortCallDoc & { _id: any })[] = [];
+
     for (const it of items) {
       const prevista = toDate(it.dataPrevistaAtracacao)!;
 
@@ -97,16 +114,13 @@ export async function savePortCalls(req: Request, res: Response) {
         },
       };
 
-      // Em mongodb v6, o retorno padrão é o DOCUMENTO (ou null), não { value: ... }
+      // MongoDB Node Driver v6 retorna o documento (ou null) diretamente
       const doc = await coll.findOneAndUpdate(filter, update, {
         upsert: true,
-        returnDocument: "after", // devolve o estado após o upsert/update
-        // includeResultMetadata: true, // se você quiser metadata e .value, ative isto e mude o código abaixo
+        returnDocument: "after",
       });
 
-      if (doc) {
-        results.push(doc);
-      }
+      if (doc) results.push(doc as any);
     }
 
     return res.status(201).json({ upserted: results.length, data: results });
