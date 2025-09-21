@@ -29,31 +29,46 @@ function toDate(s?: string | null): Date | null {
 }
 
 function unwrap<T = any>(x: any): T {
-  return x && typeof x === "object" && x.json && typeof x.json === "object" ? (x.json as T) : (x as T);
+  const j = x && typeof x === "object" ? (x.json as any) : undefined;
+  return j && typeof j === "object" ? (j as T) : (x as T);
 }
 
-function tryParseStringBody(b: unknown): unknown {
+function tryParseBody(b: unknown): unknown {
+  // já pode vir objeto (quando Content-Type correto)
+  if (b && typeof b === "object" && !Buffer.isBuffer(b)) return b;
+  // pode vir Buffer (Content-Type ausente)
+  if (Buffer.isBuffer(b)) {
+    const s = b.toString("utf8").trim();
+    try { return JSON.parse(s); } catch { return s; }
+  }
+  // pode vir string
   if (typeof b === "string") {
-    try { return JSON.parse(b); } catch {}
+    const s = b.trim();
+    try { return JSON.parse(s); } catch { return s; }
   }
   return b;
 }
 
-function normalize(body: any): SaveInput[] {
-  const srcAny = tryParseStringBody(body) as any;
+function extractArrayish(x: any): any[] {
+  // envelopamentos comuns
+  if (x?.body != null) return extractArrayish(x.body);
+  if (x?.valores != null) {
+    const v = x.valores;
+    return Array.isArray(v) ? v : [v];
+  }
+  if (Array.isArray(x)) return x;
+  if (Array.isArray(x?.data)) return x.data;
+  if (Array.isArray(x?.items)) return x.items;
+  return x ? [x] : [];
+}
 
-  const src: any[] = Array.isArray(srcAny)
-    ? srcAny
-    : Array.isArray(srcAny?.data)
-    ? srcAny.data
-    : Array.isArray(srcAny?.items)
-    ? srcAny.items
-    : srcAny
-    ? [srcAny]
-    : [];
+function normalize(body: any): SaveInput[] {
+  const parsed = tryParseBody(body) as any;
+
+  const src: any[] = extractArrayish(parsed)
+    .map((r: any) => unwrap<Partial<SaveInput>>(r));
 
   return src
-    .map((r: any) => unwrap<Partial<SaveInput>>(r))
     .map((r: Partial<SaveInput>): SaveInput => ({
       identificadorNavio: String(r?.identificadorNavio ?? ""),
       nomeArmador: String(r?.nomeArmador ?? ""),
@@ -70,14 +85,15 @@ export async function savePortCalls(req: Request, res: Response) {
     const rid = (req as any).rid as string | undefined;
 
     const ct = req.headers["content-type"] || "";
-    const rawPreview =
-      typeof req.body === "string"
-        ? req.body.slice(0, 200)
-        : JSON.stringify(req.body)?.slice(0, 200);
+    const preview = Buffer.isBuffer(req.body)
+      ? req.body.toString("utf8").slice(0, 200)
+      : typeof req.body === "string"
+      ? req.body.slice(0, 200)
+      : JSON.stringify(req.body || "").slice(0, 200);
 
     console.log(JSON.stringify({
       t: new Date().toISOString(), level: "info", msg: "save.raw",
-      rid, ct, type: typeof req.body, preview: rawPreview
+      rid, ct, type: typeof req.body, preview
     }));
 
     const items = normalize(req.body);
