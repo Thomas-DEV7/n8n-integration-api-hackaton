@@ -1,6 +1,19 @@
+// src/controllers/save.controller.ts
 import { Request, Response } from "express";
 import { getDb } from "../db/mongo.js";
 
+// Documento salvo no Mongo (snake_case no banco)
+export interface PortCallDoc {
+  identificador_navio: string;
+  nome_armador: string;
+  data_prevista_atracacao: Date;
+  data_real_atracacao?: Date | null;
+  status_grid?: string | null;
+  motivo_atraso?: string | null;
+  created_at: Date;
+}
+
+// Payload recebido (camelCase)
 type SaveInput = {
   identificadorNavio: string;
   nomeArmador: string;
@@ -16,7 +29,7 @@ function toDate(s?: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// normaliza objeto, array, {data:[...]}, {items:[...]}
+// Aceita: objeto, array, {data:[...]}, {items:[...]}
 function normalize(body: any): SaveInput[] {
   const raw = Array.isArray(body)
     ? body
@@ -59,13 +72,15 @@ export async function savePortCalls(req: Request, res: Response) {
     }
 
     const db = await getDb();
-    const coll = db.collection("port_calls");
+    const coll = db.collection<PortCallDoc>("port_calls");
 
-    const results: any[] = [];
+    const results: PortCallDoc[] = [];
     for (const it of items) {
+      const prevista = toDate(it.dataPrevistaAtracacao)!;
+
       const filter = {
         identificador_navio: it.identificadorNavio,
-        data_prevista_atracacao: toDate(it.dataPrevistaAtracacao)!, // parte da chave
+        data_prevista_atracacao: prevista, // chave composta
       };
 
       const update = {
@@ -77,17 +92,21 @@ export async function savePortCalls(req: Request, res: Response) {
         },
         $setOnInsert: {
           identificador_navio: it.identificadorNavio,
-          data_prevista_atracacao: toDate(it.dataPrevistaAtracacao),
+          data_prevista_atracacao: prevista,
           created_at: new Date(),
         },
       };
 
-      const { value } = await coll.findOneAndUpdate(filter, update, {
+      // Em mongodb v6, o retorno padrão é o DOCUMENTO (ou null), não { value: ... }
+      const doc = await coll.findOneAndUpdate(filter, update, {
         upsert: true,
-        returnDocument: "after",
+        returnDocument: "after", // devolve o estado após o upsert/update
+        // includeResultMetadata: true, // se você quiser metadata e .value, ative isto e mude o código abaixo
       });
 
-      results.push(value);
+      if (doc) {
+        results.push(doc);
+      }
     }
 
     return res.status(201).json({ upserted: results.length, data: results });
