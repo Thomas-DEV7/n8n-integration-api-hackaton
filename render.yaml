@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: datawise
+    env: node
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node dist/server.js
+    autoDeploy: true
+    envVars:
+      - key: API_KEY
+        value: change-me
+      - key: N8N_TIMEOUT_MS
+        value: "10000"
+
+      # ATENÇÃO: este é o Webhook de TESTE; em prod prefira o /webhook/...
+      - key: N8N_WEBHOOK_URL
+        value: https://n8n.hackathon.souamigu.org.br/webhook-test/8fb89c7c-940f-4118-b81f-464a8e500e31
+      - key: N8N_WEBHOOK_TEST_URL
+        value: https://n8n.hackathon.souamigu.org.br/webhook-test/8fb89c7c-940f-4118-b81f-464a8e500e31
+
+      - key: MONGODB_URI
+        value: mongodb+srv://thomas04:8zQiEhtFO0PwnbXV@databaste.55wcljk.mongodb.net/?retryWrites=true&w=majority&appName=databaste
+      - key: MONGODB_DB
+        value: hackaton
