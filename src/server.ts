@@ -1,4 +1,3 @@
-// src/server.ts
 import "dotenv/config";
 import { createApp } from "./app.js";
 import { ensureMongo } from "./db/mongo.js";
